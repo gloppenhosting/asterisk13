@@ -1,62 +1,24 @@
-FROM centos:centos6
-MAINTAINER Doug Smith <info@laboratoryb.org>
-ENV build_date 2015-08-21
+FROM debian:stable
+MAINTAINER Andreas Krüger
+ENV DEBIAN_FRONTEND noninteractive
 
-RUN yum update -y
-RUN yum install kernel-headers gcc gcc-c++ cpp ncurses ncurses-devel libxml2 libxml2-devel sqlite sqlite-devel openssl-devel newt-devel kernel-devel libuuid-devel net-snmp-devel xinetd tar -y
+RUN apt-get update -qq
+RUN apt-get install --no-install-recommends --no-install-suggests -yqq build-essential openssl libxml2-dev libncurses5-dev uuid-dev sqlite3 libsqlite3-dev pkg-config curl libjansson-dev libgtk2.0-dev
 
-# Get pj project
-RUN yum install -y bzip2
-RUN mkdir /tmp/pjproject
-RUN curl -sf -o /tmp/pjproject.tar.bz2 -L http://www.pjsip.org/release/2.3/pjproject-2.3.tar.bz2
-RUN tar -xjvf /tmp/pjproject.tar.bz2 -C /tmp/pjproject --strip-components=1
-WORKDIR /tmp/pjproject
-RUN ./configure --prefix=/usr --enable-shared --disable-sound --disable-resample --disable-video --disable-opencore-amr 1> /dev/null
-RUN make dep 1> /dev/null
-RUN make 1> /dev/null
-RUN make install
-RUN ldconfig
-RUN ldconfig -p | grep pj
+# Download and decompress latest asterisk version
+RUN curl -s http://downloads.asterisk.org/pub/telephony/certified-asterisk/certified-asterisk-13.1-current.tar.gz | tar xz
 
-WORKDIR /
-
-ENV AUTOBUILD_UNIXTIME 123123
-
-# Download asterisk.
-# This is an experiment for Asterisk 13
-RUN curl -sf -o /tmp/asterisk.tar.gz -L http://downloads.asterisk.org/pub/telephony/asterisk/asterisk-13-current.tar.gz
-
-# gunzip asterisk
-RUN mkdir /tmp/asterisk
-RUN tar -xzf /tmp/asterisk.tar.gz -C /tmp/asterisk --strip-components=1
-WORKDIR /tmp/asterisk
-
-# Extra deps.
-RUN yum install -y epel-release
-RUN yum install -y jansson-devel
-
-# make asterisk.
-ENV rebuild_date 2014-10-07
-# Configure
-RUN ./configure --libdir=/usr/lib64 1> /dev/null
-# Remove the native build option
+# Asterisk compilation & installation
+WORKDIR /certified-asterisk-13.1-cert2
+RUN ./configure;
 RUN make menuselect.makeopts
-# Idea! 
-#         menuselect/menuselect --disable BUILD_NATIVE menuselect.makeopts
-# from: https://wiki.asterisk.org/wiki/display/AST/Building+and+Installing+Asterisk
 RUN sed -i "s/BUILD_NATIVE//" menuselect.makeopts
-# Continue with a standard make.
-RUN make 1> /dev/null
-RUN make install 1> /dev/null
-RUN make samples 1> /dev/null
-WORKDIR /
-
-# Update max number of open files.
-RUN sed -i -e 's/# MAXFILES=/MAXFILES=/' /usr/sbin/safe_asterisk
+RUN make; make install; make samples
 
 RUN mkdir -p /etc/asterisk
+
 # ADD modules.conf /etc/asterisk/
 ADD iax.conf /etc/asterisk/
 ADD extensions.conf /etc/asterisk/
 
-CMD asterisk -f
+CMD ["/usr/sbin/asterisk", "-f"]
