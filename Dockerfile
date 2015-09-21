@@ -1,4 +1,4 @@
-FROM debian:stable
+FROM debian:jessie
 MAINTAINER Andreas Krüger
 ENV DEBIAN_FRONTEND noninteractive
 
